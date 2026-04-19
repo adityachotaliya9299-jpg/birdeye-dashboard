@@ -7,6 +7,7 @@ interface Token {
   name: string;
   price: number;
   volume24hUSD: number;
+  v24hUSD?: number;
   price24hChangePercent: number;
   v24hChangePercent?: number;
   logoURI?: string;
@@ -14,7 +15,6 @@ interface Token {
   liquidity?: number;
   fdv?: number;
   marketcap?: number;
-  v24hUSD?: number;
   mc?: number;
   safetyScore?: number;
   momentumScore?: number;
