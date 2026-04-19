@@ -3,7 +3,7 @@
 Real-time Solana token safety scanner powered by Birdeye Data API.
 
 ## 🔴 Live Demo
-[Coming soon - deploying to Vercel]
+[https://birdeye-dashboard.vercel.app](https://birdeye-dashboard.vercel.app)
 
 ## 🛡️ What it does
 - Scans trending Solana tokens in real-time
