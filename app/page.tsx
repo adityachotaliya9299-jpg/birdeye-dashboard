@@ -850,8 +850,26 @@ export default function Dashboard() {
         </div>
 
         <div className="mt-16 pb-8 text-center text-xs font-medium text-zinc-600">
-          Built with <span className="text-zinc-400">Birdeye Data API</span> • Auto-refreshes every 60s • <span className="text-zinc-400">#BirdeyeAPI</span>
-        </div>
+  Built with <span className="text-zinc-400">Birdeye Data API</span> • Auto-refreshes every 60s • <span className="text-zinc-400">#BirdeyeAPI</span>
+  <div className="mt-3 flex items-center justify-center gap-3">
+    <span className="text-zinc-600">Built by</span>
+    <a href="https://adityachotaliya.vercel.app" target="_blank" rel="noopener noreferrer"
+      className="font-bold text-transparent bg-clip-text"
+      style={{ backgroundImage: 'linear-gradient(90deg, #06b6d4, #3b82f6)' }}>
+      Aditya Chotaliya
+    </a>
+    <span className="text-zinc-700">•</span>
+    <a href="https://adityachotaliya.vercel.app" target="_blank" rel="noopener noreferrer"
+      className="text-zinc-500 hover:text-cyan-400 transition-colors">
+      Portfolio ↗
+    </a>
+    <span className="text-zinc-700">•</span>
+    <a href="https://github.com/adityachotaliya9299-jpg" target="_blank" rel="noopener noreferrer"
+      className="text-zinc-500 hover:text-cyan-400 transition-colors">
+      GitHub ↗
+    </a>
+  </div>
+</div>
       </div>
     </main>
   );
