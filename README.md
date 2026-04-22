@@ -16,6 +16,7 @@ https://birdeye-dashboard.vercel.app
 - Watchlist with localStorage persistence
 - Sort by safety, momentum, volume, price
 - Top Movers dashboard
+- Rug Pull Probability %
 - Solana live stats bar
 - Auto-refreshes every 60 seconds
 - Mobile responsive
