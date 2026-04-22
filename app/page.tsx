@@ -1,6 +1,7 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 interface Token {
   address: string;
   symbol: string;
@@ -34,6 +35,43 @@ interface SolanaStats {
   trendingCount: number;
 }
 
+// ─── ANIMATED COUNTER HOOK ────────────────────────────────────────────────────
+
+function useAnimatedCounter(target: number, duration = 900, decimals = 0) {
+  const [value, setValue] = useState(target); // ← start at target, not 0
+  const prevTargetRef = useRef(target);
+  const rafRef = useRef<number>(0);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    if (!mountedRef.current) {
+      // First mount — just set immediately, no animation
+      mountedRef.current = true;
+      setValue(target);
+      prevTargetRef.current = target;
+      return;
+    }
+    if (target === prevTargetRef.current) return;
+
+    const from = prevTargetRef.current;
+    prevTargetRef.current = target;
+    const startTime = performance.now();
+
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out-cubic
+      setValue(parseFloat((from + (target - from) * eased).toFixed(decimals)));
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [target, duration, decimals]);
+
+  return value;
+}
+
+// ─── SCORING ─────────────────────────────────────────────────────────────────
 function calcRiskScore(token: Token): { score: number; reason: string } {
   let score = 100;
   const reasons: string[] = [];
@@ -84,6 +122,7 @@ function calcFearGreed(tokens: Token[]): { score: number; label: string; colorCl
   return { score, label, colorClass, hex };
 }
 
+// ─── SAFETY BADGE ─────────────────────────────────────────────────────────────
 function SafetyBadge({ score }: { score: number }) {
   const isSafe = score >= 70;
   const isCaution = score >= 40;
@@ -94,12 +133,13 @@ function SafetyBadge({ score }: { score: number }) {
     : 'text-rose-400 border-rose-400/30 bg-rose-400/10';
   const label = isSafe ? 'SAFE' : isCaution ? 'CAUTION' : 'RISKY';
   return (
-    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider border whitespace-nowrap ${colorClass}`}>
+    <span className={`badge-pop px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider border whitespace-nowrap inline-block ${colorClass}`}>
       {label} {score}
     </span>
   );
 }
 
+// ─── MOMENTUM BAR ─────────────────────────────────────────────────────────────
 function MomentumBar({ score }: { score: number }) {
   const colorHex = score >= 70 ? '#34d399' : score >= 40 ? '#facc15' : '#9ca3af';
   return (
@@ -109,36 +149,41 @@ function MomentumBar({ score }: { score: number }) {
         <span className="font-mono text-xs font-bold" style={{ color: colorHex }}>{score}</span>
       </div>
       <div className="h-1.5 rounded-full bg-zinc-800/50 overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-1000 ease-out"
-          style={{ width: `${score}%`, background: `linear-gradient(90deg, transparent, ${colorHex})` }} />
+        <div
+          className="h-full rounded-full momentum-bar-fill"
+          style={{ width: `${score}%`, background: `linear-gradient(90deg, transparent, ${colorHex})` }}
+        />
       </div>
     </div>
   );
 }
 
-// SOLANA STATS BAR
+// ─── SOLANA STATS BAR ─────────────────────────────────────────────────────────
 function SolanaStatsBar({ stats, trending }: { stats: SolanaStats; trending: Token[] }) {
   const totalVol = trending.reduce((sum, t) => sum + (t.volume24hUSD || 0), 0);
   const avgSafety = trending.length > 0
     ? Math.round(trending.reduce((sum, t) => sum + (t.safetyScore || 50), 0) / trending.length)
     : 0;
+  const animSol    = useAnimatedCounter(stats.solPrice, 900, 2);
+  const animVol    = useAnimatedCounter(totalVol / 1_000_000, 900, 1);
+  const animSafety = useAnimatedCounter(avgSafety, 800);
 
   return (
     <div className="bg-zinc-900/60 border-b border-zinc-800/50 overflow-x-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex items-center gap-6 text-xs whitespace-nowrap">
         <div className="flex items-center gap-2">
           <span className="text-zinc-500">SOL</span>
-          <span className="font-mono font-bold text-white">${stats.solPrice.toFixed(2)}</span>
+          <span className="font-mono font-bold text-white">${animSol.toFixed(2)}</span>
         </div>
         <div className="w-px h-3 bg-zinc-700" />
         <div className="flex items-center gap-2">
           <span className="text-zinc-500">24h Vol (trending)</span>
-          <span className="font-mono font-bold text-cyan-400">${(totalVol / 1_000_000).toFixed(1)}M</span>
+          <span className="font-mono font-bold text-cyan-400">${animVol.toFixed(1)}M</span>
         </div>
         <div className="w-px h-3 bg-zinc-700" />
         <div className="flex items-center gap-2">
           <span className="text-zinc-500">Avg Safety</span>
-          <span className="font-mono font-bold text-emerald-400">{avgSafety}/100</span>
+          <span className="font-mono font-bold text-emerald-400">{animSafety}/100</span>
         </div>
         <div className="w-px h-3 bg-zinc-700" />
         <div className="flex items-center gap-2">
@@ -147,7 +192,7 @@ function SolanaStatsBar({ stats, trending }: { stats: SolanaStats; trending: Tok
         </div>
         <div className="w-px h-3 bg-zinc-700" />
         <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 live-dot" />
           <span className="text-emerald-400 font-medium">Live</span>
         </div>
       </div>
@@ -155,22 +200,40 @@ function SolanaStatsBar({ stats, trending }: { stats: SolanaStats; trending: Tok
   );
 }
 
-// FEAR & GREED
+// ─── FEAR & GREED METER ───────────────────────────────────────────────────────
+
 function FearGreedMeter({ tokens }: { tokens: Token[] }) {
   const { score, label, colorClass, hex } = calcFearGreed(tokens);
-  const circumference = 2 * Math.PI * 36;
-  const progress = (score / 100) * circumference;
+  const circumference = 2 * Math.PI * 36; // ≈ 226.2
+  const [drawn, setDrawn] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setDrawn(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const progress = drawn ? (score / 100) * circumference : 0;
+  const animScore = useAnimatedCounter(drawn ? score : 0, 1200);
+
   return (
-    <div className="flex items-center gap-6 p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80">
+    <div className="flex items-center gap-6 p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700/80 transition-all duration-300">
       <div className="relative flex-shrink-0 w-24 h-24">
         <svg width="96" height="96" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="36" fill="none" className="stroke-zinc-800" strokeWidth="8" />
-          <circle cx="50" cy="50" r="36" fill="none" stroke={hex} strokeWidth="8"
-            strokeDasharray={`${progress} ${circumference}`} strokeLinecap="round"
-            transform="rotate(-90 50 50)" className="transition-all duration-1000 ease-out" />
+          {/* Track */}
+          <circle cx="50" cy="50" r="36" fill="none" stroke="#27272a" strokeWidth="8" />
+          {/* Animated arc */}
+          <circle
+            cx="50" cy="50" r="36" fill="none"
+            stroke={hex} strokeWidth="8"
+            strokeLinecap="round"
+            transform="rotate(-90 50 50)"
+            strokeDasharray={`${progress} ${circumference}`}
+            strokeDashoffset="0"
+            className="fg-circle"
+          />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-mono text-2xl font-bold text-white">{score}</span>
+          <span className="font-mono text-2xl font-bold text-white">{Math.round(animScore)}</span>
         </div>
       </div>
       <div>
@@ -182,12 +245,12 @@ function FearGreedMeter({ tokens }: { tokens: Token[] }) {
   );
 }
 
-// TOP MOVERS
+// ─── TOP MOVERS ───────────────────────────────────────────────────────────────
 function TopMovers({ tokens, onSelect }: { tokens: Token[]; onSelect: (t: Token) => void }) {
   if (tokens.length === 0) return null;
   const topGainers = [...tokens].sort((a, b) => (b.price24hChangePercent || 0) - (a.price24hChangePercent || 0)).slice(0, 3);
-  const topVolume = [...tokens].sort((a, b) => (b.volume24hChangePercent || 0) - (a.volume24hChangePercent || 0)).slice(0, 3);
-  const topSafe = [...tokens].filter(t => (t.safetyScore || 0) >= 70).sort((a, b) => (b.safetyScore || 0) - (a.safetyScore || 0)).slice(0, 3);
+  const topVolume  = [...tokens].sort((a, b) => (b.volume24hChangePercent || 0) - (a.volume24hChangePercent || 0)).slice(0, 3);
+  const topSafe    = [...tokens].filter(t => (t.safetyScore || 0) >= 70).sort((a, b) => (b.safetyScore || 0) - (a.safetyScore || 0)).slice(0, 3);
 
   const Section = ({ title, icon, items, valueFormat, colorClass }: any) => (
     <div className="flex-1 min-w-0">
@@ -198,7 +261,7 @@ function TopMovers({ tokens, onSelect }: { tokens: Token[]; onSelect: (t: Token)
       <div className="space-y-2">
         {items.map((token: Token, i: number) => (
           <div key={token.address} onClick={() => onSelect(token)}
-            className="group flex items-center gap-3 p-2 rounded-xl cursor-pointer bg-zinc-950/50 border border-zinc-800/50 hover:bg-zinc-800 hover:border-zinc-700 transition-all">
+            className="group flex items-center gap-3 p-2 rounded-xl cursor-pointer bg-zinc-950/50 border border-zinc-800/50 hover:bg-zinc-800 hover:border-zinc-700 hover:-translate-y-0.5 transition-all duration-200">
             <span className="text-[10px] font-mono text-zinc-600 w-4">{i + 1}</span>
             {token.logoURI ? (
               <img src={token.logoURI} alt={token.symbol} className="w-5 h-5 rounded-full flex-shrink-0"
@@ -215,59 +278,67 @@ function TopMovers({ tokens, onSelect }: { tokens: Token[]; onSelect: (t: Token)
   );
 
   return (
-    <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 mb-6">
+    <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700/80 transition-all duration-300 mb-6">
       <div className="flex items-center gap-2 mb-5">
         <span className="text-lg">📊</span>
         <p className="text-sm font-bold text-white uppercase tracking-wider">Top Movers</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-4 divide-y md:divide-y-0 md:divide-x divide-zinc-800">
-        <div className="pt-4 md:pt-0 md:pl-0"><Section title="Gainers" icon="🚀" items={topGainers} colorClass="text-emerald-400" valueFormat={(t: Token) => `+${(t.price24hChangePercent || 0).toFixed(0)}%`} /></div>
-        <div className="pt-4 md:pt-0 md:pl-4"><Section title="Vol Spike" icon="🐋" items={topVolume} colorClass="text-cyan-400" valueFormat={(t: Token) => `+${((t.volume24hChangePercent || 0)).toFixed(0)}%`} /></div>
-        <div className="pt-4 md:pt-0 md:pl-4"><Section title="Safest" icon="🛡️" items={topSafe} colorClass="text-emerald-400" valueFormat={(t: Token) => `${t.safetyScore}/100`} /></div>
+        <div className="pt-4 md:pt-0 md:pl-0">
+          <Section title="Gainers" icon="🚀" items={topGainers} colorClass="text-emerald-400"
+            valueFormat={(t: Token) => `+${(t.price24hChangePercent || 0).toFixed(0)}%`} />
+        </div>
+        <div className="pt-4 md:pt-0 md:pl-4">
+          <Section title="Vol Spike" icon="🐋" items={topVolume} colorClass="text-cyan-400"
+            valueFormat={(t: Token) => `+${(t.volume24hChangePercent || 0).toFixed(0)}%`} />
+        </div>
+        <div className="pt-4 md:pt-0 md:pl-4">
+          <Section title="Safest" icon="🛡️" items={topSafe} colorClass="text-emerald-400"
+            valueFormat={(t: Token) => `${t.safetyScore}/100`} />
+        </div>
       </div>
     </div>
   );
 }
 
-// TOKEN COMPARISON
+// ─── COMPARE MODAL ────────────────────────────────────────────────────────────
 function CompareModal({ tokens, onClose }: { tokens: [Token, Token]; onClose: () => void }) {
   const [a, b] = tokens;
   const metrics = [
-    { label: 'Price', aVal: `$${a.price < 0.001 ? a.price.toExponential(2) : a.price.toFixed(4)}`, bVal: `$${b.price < 0.001 ? b.price.toExponential(2) : b.price.toFixed(4)}`, winner: null },
-    { label: '24h Change', aVal: `${(a.price24hChangePercent || 0).toFixed(1)}%`, bVal: `${(b.price24hChangePercent || 0).toFixed(1)}%`, winner: (a.price24hChangePercent || 0) > (b.price24hChangePercent || 0) ? 'a' : 'b' },
-    { label: 'Volume', aVal: `$${((a.volume24hUSD || 0) / 1e6).toFixed(2)}M`, bVal: `$${((b.volume24hUSD || 0) / 1e6).toFixed(2)}M`, winner: (a.volume24hUSD || 0) > (b.volume24hUSD || 0) ? 'a' : 'b' },
-    { label: 'Safety Score', aVal: `${a.safetyScore}/100`, bVal: `${b.safetyScore}/100`, winner: (a.safetyScore || 0) > (b.safetyScore || 0) ? 'a' : 'b' },
-    { label: 'Momentum', aVal: `${a.momentumScore}/100`, bVal: `${b.momentumScore}/100`, winner: (a.momentumScore || 0) > (b.momentumScore || 0) ? 'a' : 'b' },
-    { label: 'Liquidity', aVal: `$${((a.liquidity || 0) / 1000).toFixed(0)}K`, bVal: `$${((b.liquidity || 0) / 1000).toFixed(0)}K`, winner: (a.liquidity || 0) > (b.liquidity || 0) ? 'a' : 'b' },
+    { label: 'Price',        aVal: `$${a.price < 0.001 ? a.price.toExponential(2) : a.price.toFixed(4)}`,   bVal: `$${b.price < 0.001 ? b.price.toExponential(2) : b.price.toFixed(4)}`,   winner: null },
+    { label: '24h Change',   aVal: `${(a.price24hChangePercent||0).toFixed(1)}%`,  bVal: `${(b.price24hChangePercent||0).toFixed(1)}%`,  winner: (a.price24hChangePercent||0) > (b.price24hChangePercent||0) ? 'a' : 'b' },
+    { label: 'Volume',       aVal: `$${((a.volume24hUSD||0)/1e6).toFixed(2)}M`,   bVal: `$${((b.volume24hUSD||0)/1e6).toFixed(2)}M`,   winner: (a.volume24hUSD||0) > (b.volume24hUSD||0) ? 'a' : 'b' },
+    { label: 'Safety Score', aVal: `${a.safetyScore}/100`,                         bVal: `${b.safetyScore}/100`,                         winner: (a.safetyScore||0) > (b.safetyScore||0) ? 'a' : 'b' },
+    { label: 'Momentum',     aVal: `${a.momentumScore}/100`,                       bVal: `${b.momentumScore}/100`,                       winner: (a.momentumScore||0) > (b.momentumScore||0) ? 'a' : 'b' },
+    { label: 'Liquidity',    aVal: `$${((a.liquidity||0)/1000).toFixed(0)}K`,     bVal: `$${((b.liquidity||0)/1000).toFixed(0)}K`,     winner: (a.liquidity||0) > (b.liquidity||0) ? 'a' : 'b' },
   ];
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-lg p-6 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg p-6 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl card-enter card-enter-1" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">⚔️ Token Comparison</h2>
-          <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white transition-colors rounded-full hover:bg-zinc-900">✕</button>
+          <h2 className="text-xl font-bold text-white">⚔️ Token Comparison</h2>
+          <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-900 rounded-full transition-colors">✕</button>
         </div>
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="p-4 text-center rounded-2xl bg-zinc-900 border border-zinc-800">
-            {a.logoURI && <img src={a.logoURI} alt={a.symbol} className="w-10 h-10 mx-auto mb-2 rounded-full" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+            {a.logoURI && <img src={a.logoURI} alt={a.symbol} className="w-10 h-10 mx-auto mb-2 rounded-full" onError={(e) => { e.currentTarget.style.display='none'; }} />}
             <p className="text-sm font-bold text-white">{a.symbol}</p>
           </div>
           <div className="flex items-center justify-center text-3xl text-zinc-700 font-black italic">VS</div>
           <div className="p-4 text-center rounded-2xl bg-zinc-900 border border-zinc-800">
-            {b.logoURI && <img src={b.logoURI} alt={b.symbol} className="w-10 h-10 mx-auto mb-2 rounded-full" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+            {b.logoURI && <img src={b.logoURI} alt={b.symbol} className="w-10 h-10 mx-auto mb-2 rounded-full" onError={(e) => { e.currentTarget.style.display='none'; }} />}
             <p className="text-sm font-bold text-white">{b.symbol}</p>
           </div>
         </div>
         <div className="space-y-3">
           {metrics.map(({ label, aVal, bVal, winner }) => (
             <div key={label} className="grid grid-cols-3 gap-4 items-center">
-              <div className={`p-2.5 text-center rounded-xl ${winner === 'a' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-zinc-900 border border-zinc-800'}`}>
-                <p className={`font-mono text-sm font-bold ${winner === 'a' ? 'text-emerald-400' : 'text-zinc-300'}`}>{aVal}</p>
+              <div className={`p-2.5 text-center rounded-xl ${winner==='a' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-zinc-900 border border-zinc-800'}`}>
+                <p className={`font-mono text-sm font-bold ${winner==='a' ? 'text-emerald-400' : 'text-zinc-300'}`}>{aVal}</p>
               </div>
               <p className="text-center text-xs font-medium text-zinc-500 uppercase tracking-wider">{label}</p>
-              <div className={`p-2.5 text-center rounded-xl ${winner === 'b' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-zinc-900 border border-zinc-800'}`}>
-                <p className={`font-mono text-sm font-bold ${winner === 'b' ? 'text-emerald-400' : 'text-zinc-300'}`}>{bVal}</p>
+              <div className={`p-2.5 text-center rounded-xl ${winner==='b' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-zinc-900 border border-zinc-800'}`}>
+                <p className={`font-mono text-sm font-bold ${winner==='b' ? 'text-emerald-400' : 'text-zinc-300'}`}>{bVal}</p>
               </div>
             </div>
           ))}
@@ -277,53 +348,80 @@ function CompareModal({ tokens, onClose }: { tokens: [Token, Token]; onClose: ()
   );
 }
 
-// WATCHLIST STAR BUTTON
+// ─── WATCHLIST BUTTON ─────────────────────────────────────────────────────────
 function WatchlistButton({ token, watchlist, onToggle }: { token: Token; watchlist: string[]; onToggle: (address: string) => void }) {
   const isWatched = watchlist.includes(token.address);
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onToggle(token.address); }}
-      className={`p-1.5 rounded-lg transition-all ${isWatched ? 'text-yellow-400 bg-yellow-400/10' : 'text-zinc-600 hover:text-yellow-400 bg-zinc-800'}`}
+      className={`p-1.5 rounded-lg transition-all duration-200 active:scale-90 ${
+        isWatched ? 'text-yellow-400 bg-yellow-400/10' : 'text-zinc-600 hover:text-yellow-400 bg-zinc-800 hover:bg-yellow-400/10'
+      }`}
       title={isWatched ? 'Remove from watchlist' : 'Add to watchlist'}>
       {isWatched ? '★' : '☆'}
     </button>
   );
 }
 
-// TOKEN CARD
-function TokenCard({ token, onClick, onCompare, isCompareSelected, watchlist, onWatchlistToggle }: {
+// ─── TOKEN CARD ───────────────────────────────────────────────────────────────
+function TokenCard({ token, onClick, onCompare, isCompareSelected, watchlist, onWatchlistToggle, index }: {
   token: Token; onClick: () => void; onCompare: (t: Token) => void;
   isCompareSelected: boolean; watchlist: string[]; onWatchlistToggle: (address: string) => void;
+  index: number;
 }) {
   const isUp = (token.price24hChangePercent || 0) > 0;
   const vol = token.volume24hUSD || token.v24hUSD || 0;
-  const priceStr = token.price < 0.001 ? token.price.toExponential(2) : token.price < 1 ? token.price.toFixed(4) : token.price.toFixed(2);
+  const priceStr = token.price < 0.001 ? token.price.toExponential(2)
+    : token.price < 1 ? token.price.toFixed(4)
+    : token.price.toFixed(2);
+
+  const safetyScore = token.safetyScore || 0;
+  const glowClass = safetyScore >= 70 ? 'card-glow-safe'
+    : safetyScore >= 40 ? 'card-glow-caution'
+    : 'card-glow-risky';
+  const radialColor = safetyScore >= 70 ? 'rgba(52,211,153,0.05)'
+    : safetyScore >= 40 ? 'rgba(250,204,21,0.04)'
+    : 'rgba(244,63,94,0.04)';
+
+  const staggerIdx = Math.min(index + 1, 20);
 
   return (
-    <div className={`group relative p-5 rounded-2xl cursor-pointer transition-all duration-300 border ${
-      isCompareSelected
-        ? 'bg-cyan-950/20 border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.15)]'
-        : 'bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/80 hover:border-zinc-700 hover:-translate-y-1 hover:shadow-xl'
-    }`} onClick={onClick}>
+    <div
+      className={`card-enter card-enter-${staggerIdx} group relative p-5 rounded-2xl cursor-pointer border ${glowClass} ${
+        isCompareSelected
+          ? 'bg-cyan-950/20 border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.15)]'
+          : 'bg-zinc-900/50 border-zinc-800/80'
+      }`}
+      onClick={onClick}
+    >
+      {/* Hover radial glow */}
+      <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+        style={{ background: `radial-gradient(ellipse at top right, ${radialColor}, transparent 70%)` }} />
 
       {/* Action buttons */}
-      <div className="absolute top-3 right-3 flex gap-1.5" onClick={e => e.stopPropagation()}>
+      <div className="absolute top-3 right-3 flex gap-1.5 z-10" onClick={e => e.stopPropagation()}>
         <WatchlistButton token={token} watchlist={watchlist} onToggle={onWatchlistToggle} />
-        <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}?token=${token.address}`); alert('Link copied!'); }}
-          className="p-1.5 rounded-lg bg-zinc-800 text-zinc-600 hover:text-white transition-colors opacity-0 group-hover:opacity-100 text-xs"
-          title="Share">🔗</button>
-        <button onClick={() => onCompare(token)}
-          className={`px-2 py-1 text-xs font-bold rounded-lg transition-colors opacity-0 group-hover:opacity-100 ${
-            isCompareSelected ? 'bg-cyan-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400 hover:text-white'
-          }`}>⚔️</button>
+        <button
+          onClick={() => { navigator.clipboard.writeText(`${window.location.origin}?token=${token.address}`); alert('Link copied!'); }}
+          className="p-1.5 rounded-lg bg-zinc-800 text-zinc-600 hover:text-white hover:bg-zinc-700 transition-all opacity-0 group-hover:opacity-100 text-xs active:scale-90"
+          title="Share">🔗
+        </button>
+        <button
+          onClick={() => onCompare(token)}
+          className={`px-2 py-1 text-xs font-bold rounded-lg transition-all opacity-0 group-hover:opacity-100 active:scale-90 ${
+            isCompareSelected ? 'bg-cyan-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+          }`}>⚔️
+        </button>
       </div>
 
+      {/* Header */}
       <div className="flex items-center gap-3 mb-4 pr-20">
         {token.logoURI ? (
-          <img src={token.logoURI} alt={token.symbol} className="w-10 h-10 rounded-full flex-shrink-0 bg-zinc-950"
+          <img src={token.logoURI} alt={token.symbol}
+            className="w-10 h-10 rounded-full flex-shrink-0 bg-zinc-950 ring-1 ring-zinc-800 group-hover:ring-zinc-700 transition-all"
             onError={(e) => { e.currentTarget.style.display = 'none'; }} />
         ) : (
-          <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-500 flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-500 flex-shrink-0 ring-1 ring-zinc-700">
             {token.symbol?.slice(0, 2).toUpperCase()}
           </div>
         )}
@@ -351,28 +449,35 @@ function TokenCard({ token, onClick, onCompare, isCompareSelected, watchlist, on
           )}
         </div>
       </div>
+
       {token.momentumScore !== undefined && <MomentumBar score={token.momentumScore} />}
     </div>
   );
 }
 
+// ─── WHALE CARD ───────────────────────────────────────────────────────────────
 function WhaleCard({ token, onClick }: { token: Token; onClick: () => void }) {
   const volChange = token.volume24hChangePercent || token.v24hChangePercent || 0;
   const vol = token.volume24hUSD || token.v24hUSD || 0;
   return (
-    <div onClick={onClick} className="flex-shrink-0 w-56 p-4 rounded-2xl cursor-pointer bg-emerald-950/20 border border-emerald-500/30 hover:bg-emerald-900/30 hover:-translate-y-1 transition-all">
+    <div onClick={onClick}
+      className="flex-shrink-0 w-56 p-4 rounded-2xl cursor-pointer border border-emerald-500/30 hover:border-emerald-400/50 hover:-translate-y-1.5 hover:shadow-[0_8px_24px_rgba(52,211,153,0.15)] transition-all duration-300 whale-shimmer">
       <div className="flex items-center gap-3 mb-3">
-        {token.logoURI && <img src={token.logoURI} alt={token.symbol} className="w-8 h-8 rounded-full bg-zinc-950" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+        {token.logoURI && <img src={token.logoURI} alt={token.symbol} className="w-8 h-8 rounded-full bg-zinc-950"
+          onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
         <span className="text-base font-bold text-white">{token.symbol}</span>
         <span className="ml-auto text-xl">🐋</span>
       </div>
       <p className="text-sm font-bold text-emerald-400 mb-0.5">+{volChange.toFixed(0)}% Volume</p>
       <p className="text-xs text-zinc-400 font-mono mb-2">${(vol / 1_000_000).toFixed(2)}M traded</p>
-      <p className="font-mono text-sm font-bold text-white">${token.price < 0.001 ? token.price.toExponential(2) : token.price.toFixed(4)}</p>
+      <p className="font-mono text-sm font-bold text-white">
+        ${token.price < 0.001 ? token.price.toExponential(2) : token.price.toFixed(4)}
+      </p>
     </div>
   );
 }
 
+// ─── ALERT LOG ────────────────────────────────────────────────────────────────
 function AlertLog({ alerts }: { alerts: Alert[] }) {
   if (alerts.length === 0) return null;
   return (
@@ -384,7 +489,7 @@ function AlertLog({ alerts }: { alerts: Alert[] }) {
       </div>
       <div className="space-y-2.5">
         {alerts.map((alert, i) => (
-          <div key={i} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3 rounded-xl bg-zinc-950/50 border border-zinc-800/50">
+          <div key={i} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3 rounded-xl bg-zinc-950/50 border border-zinc-800/50 hover:border-zinc-700/50 transition-colors">
             <span className="text-base">{alert.type === 'whale' ? '🐋' : '🚀'}</span>
             <span className="font-bold text-white">{alert.token.symbol}</span>
             <span className="font-mono text-xs font-bold text-emerald-400">+{(alert.token.volume24hChangePercent || 0).toFixed(0)}% vol</span>
@@ -398,6 +503,7 @@ function AlertLog({ alerts }: { alerts: Alert[] }) {
   );
 }
 
+// ─── TOKEN MODAL ──────────────────────────────────────────────────────────────
 function TokenModal({ token, onClose, watchlist, onWatchlistToggle }: {
   token: Token; onClose: () => void; watchlist: string[]; onWatchlistToggle: (address: string) => void;
 }) {
@@ -410,13 +516,14 @@ function TokenModal({ token, onClose, watchlist, onWatchlistToggle }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
-      <div className="w-full max-w-md p-6 my-8 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-md p-6 my-8 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl relative card-enter card-enter-1" onClick={e => e.stopPropagation()}>
         <div className="absolute -top-10 -left-10 w-40 h-40 rounded-full blur-3xl opacity-10 pointer-events-none" style={{ backgroundColor: safetyHex }} />
 
         <div className="flex items-start justify-between mb-6 relative">
           <div className="flex items-center gap-4">
             {token.logoURI ? (
-              <img src={token.logoURI} alt={token.symbol} className="w-16 h-16 rounded-full bg-zinc-900 border-2 border-zinc-800" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              <img src={token.logoURI} alt={token.symbol} className="w-16 h-16 rounded-full bg-zinc-900 border-2 border-zinc-800"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             ) : (
               <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center text-xl font-bold text-zinc-500">
                 {token.symbol?.slice(0, 2).toUpperCase()}
@@ -428,15 +535,15 @@ function TokenModal({ token, onClose, watchlist, onWatchlistToggle }: {
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-900 rounded-full transition-colors">✕</button>
+            <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-900 rounded-full transition-colors active:scale-90">✕</button>
             <button onClick={() => onWatchlistToggle(token.address)}
-              className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-colors border ${
+              className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-all border active:scale-95 ${
                 isWatched ? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/30' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-yellow-400/30 hover:text-yellow-400'
               }`}>
               {isWatched ? '★ Watching' : '☆ Watch'}
             </button>
             <button onClick={() => { navigator.clipboard.writeText(shareLink); alert('Link copied!'); }}
-              className="text-xs px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 transition-colors font-medium">
+              className="text-xs px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 active:scale-95 transition-all font-medium">
               🔗 Share
             </button>
           </div>
@@ -444,14 +551,14 @@ function TokenModal({ token, onClose, watchlist, onWatchlistToggle }: {
 
         <div className="grid grid-cols-2 gap-3 mb-6 relative">
           {[
-            { label: 'Price', value: `$${token.price < 0.001 ? token.price.toExponential(2) : token.price.toFixed(4)}` },
+            { label: 'Price',      value: `$${token.price < 0.001 ? token.price.toExponential(2) : token.price.toFixed(4)}` },
             { label: '24h Change', value: `${isUp ? '+' : ''}${(token.price24hChangePercent || 0).toFixed(2)}%`, colorClass: isUp ? 'text-emerald-400' : 'text-rose-400' },
             { label: 'Volume 24h', value: `$${(vol / 1_000_000).toFixed(2)}M` },
-            { label: 'Liquidity', value: token.liquidity ? `$${(token.liquidity / 1000).toFixed(0)}K` : 'N/A' },
+            { label: 'Liquidity',  value: token.liquidity ? `$${(token.liquidity / 1000).toFixed(0)}K` : 'N/A' },
             { label: 'FDV / MCap', value: fdv ? `$${(fdv / 1_000_000).toFixed(2)}M` : 'N/A' },
             { label: 'Vol Change', value: token.volume24hChangePercent ? `${token.volume24hChangePercent.toFixed(1)}%` : 'N/A' },
           ].map(({ label, value, colorClass }) => (
-            <div key={label} className="p-3.5 rounded-2xl bg-zinc-900/50 border border-zinc-800/50">
+            <div key={label} className="p-3.5 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 hover:border-zinc-700/50 transition-colors">
               <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">{label}</p>
               <p className={`font-mono text-sm font-bold ${colorClass || 'text-zinc-200'}`}>{value}</p>
             </div>
@@ -466,14 +573,14 @@ function TokenModal({ token, onClose, watchlist, onWatchlistToggle }: {
             </div>
             <p className="text-xs text-zinc-400 mb-3">{token.riskReason}</p>
             <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-              <div className="h-full rounded-full transition-all" style={{ width: `${token.safetyScore}%`, backgroundColor: safetyHex }} />
+              <div className="h-full rounded-full momentum-bar-fill" style={{ width: `${token.safetyScore}%`, backgroundColor: safetyHex }} />
             </div>
           </div>
         )}
 
         <p className="text-[10px] font-mono text-zinc-600 break-all mb-6 text-center">{token.address}</p>
         <button onClick={() => window.open(`https://birdeye.so/token/${token.address}?chain=solana`, '_blank')}
-          className="w-full py-4 rounded-xl font-bold text-sm text-zinc-950 transition-all hover:opacity-90"
+          className="w-full py-4 rounded-xl font-bold text-sm text-zinc-950 transition-all hover:opacity-90 hover:scale-[1.01] active:scale-[0.99]"
           style={{ backgroundColor: safetyHex }}>
           View on Birdeye ↗
         </button>
@@ -482,44 +589,47 @@ function TokenModal({ token, onClose, watchlist, onWatchlistToggle }: {
   );
 }
 
+// ─── SKELETON CARD ────────────────────────────────────────────────────────────
 function SkeletonCard() {
   return (
-    <div className="p-5 rounded-2xl bg-zinc-900/30 border border-zinc-800/30 animate-pulse">
+    <div className="p-5 rounded-2xl bg-zinc-900/30 border border-zinc-800/30">
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-10 h-10 rounded-full bg-zinc-800/50" />
-        <div className="flex-1">
-          <div className="h-4 w-16 bg-zinc-800/50 rounded mb-2" />
-          <div className="h-2 w-24 bg-zinc-800/50 rounded" />
+        <div className="w-10 h-10 rounded-full skeleton-shimmer flex-shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 w-16 skeleton-shimmer" />
+          <div className="h-2 w-24 skeleton-shimmer" />
         </div>
       </div>
-      <div className="h-6 w-20 bg-zinc-800/50 rounded mb-2" />
-      <div className="h-3 w-28 bg-zinc-800/50 rounded mb-4" />
-      <div className="h-1.5 w-full bg-zinc-800/50 rounded-full" />
+      <div className="h-5 w-20 skeleton-shimmer mb-2" />
+      <div className="h-3 w-28 skeleton-shimmer mb-4" />
+      <div className="h-1.5 w-full skeleton-shimmer" />
     </div>
   );
 }
 
+// ─── TYPES ────────────────────────────────────────────────────────────────────
 type FilterType = 'all' | 'safe' | 'gainers' | 'momentum' | 'watchlist';
-type SortType = 'default' | 'price_high' | 'price_low' | 'volume' | 'safety' | 'momentum' | 'change';
+type SortType   = 'default' | 'price_high' | 'price_low' | 'volume' | 'safety' | 'momentum' | 'change';
 
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const [trending, setTrending] = useState<Token[]>([]);
+  const [trending, setTrending]       = useState<Token[]>([]);
   const [newListings, setNewListings] = useState<Token[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'trending' | 'new'>('trending');
-  const [filter, setFilter] = useState<FilterType>('all');
-  const [sortBy, setSortBy] = useState<SortType>('default');
+  const [loading, setLoading]         = useState(true);
+  const [activeTab, setActiveTab]     = useState<'trending' | 'new'>('trending');
+  const [filter, setFilter]           = useState<FilterType>('all');
+  const [sortBy, setSortBy]           = useState<SortType>('default');
   const [lastUpdated, setLastUpdated] = useState('');
-  const [spinning, setSpinning] = useState(false);
+  const [spinning, setSpinning]       = useState(false);
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
-  const [search, setSearch] = useState('');
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [search, setSearch]           = useState('');
+  const [alerts, setAlerts]           = useState<Alert[]>([]);
   const [compareTokens, setCompareTokens] = useState<Token[]>([]);
   const [showCompare, setShowCompare] = useState(false);
-  const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [watchlist, setWatchlist]     = useState<string[]>([]);
   const [solanaStats, setSolanaStats] = useState<SolanaStats>({ solPrice: 0, totalVolume: 0, trendingCount: 0 });
+  const [refreshKey, setRefreshKey]   = useState(0);
 
-  // Load watchlist from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem('birdradar_watchlist');
@@ -535,7 +645,6 @@ export default function Dashboard() {
     });
   };
 
-  // Handle ?token= URL param
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tokenAddress = params.get('token');
@@ -557,13 +666,13 @@ export default function Dashboard() {
     try {
       const [trendRes, newRes] = await Promise.all([fetch('/api/trending'), fetch('/api/new-listings')]);
       const trendData = await trendRes.json();
-      const newData = await newRes.json();
+      const newData   = await newRes.json();
       const enrichedTrending = enrichTokens(trendData?.data?.tokens || []);
       setTrending(enrichedTrending);
       setNewListings(enrichTokens((newData?.data?.tokens || []).slice(0, 20)));
       setLastUpdated(new Date().toLocaleTimeString());
+      setRefreshKey(k => k + 1); // ← triggers card re-entrance animation
 
-      // Extract SOL price from top volume list
       const solToken = newData?.data?.tokens?.find((t: any) =>
         t.symbol === 'SOL' || t.address === 'So11111111111111111111111111111111111111112');
       setSolanaStats({
@@ -618,20 +727,20 @@ export default function Dashboard() {
       return t.symbol?.toLowerCase().includes(q) || t.name?.toLowerCase().includes(q);
     })
     .filter(t => {
-      if (filter === 'safe') return (t.safetyScore || 0) >= 70;
-      if (filter === 'gainers') return (t.price24hChangePercent || 0) > 50;
-      if (filter === 'momentum') return (t.momentumScore || 0) >= 60;
+      if (filter === 'safe')      return (t.safetyScore || 0) >= 70;
+      if (filter === 'gainers')   return (t.price24hChangePercent || 0) > 50;
+      if (filter === 'momentum')  return (t.momentumScore || 0) >= 60;
       if (filter === 'watchlist') return watchlist.includes(t.address);
       return true;
     })
     .sort((a, b) => {
       switch (sortBy) {
         case 'price_high': return b.price - a.price;
-        case 'price_low': return a.price - b.price;
-        case 'volume': return (b.volume24hUSD || 0) - (a.volume24hUSD || 0);
-        case 'safety': return (b.safetyScore || 0) - (a.safetyScore || 0);
-        case 'momentum': return (b.momentumScore || 0) - (a.momentumScore || 0);
-        case 'change': return (b.price24hChangePercent || 0) - (a.price24hChangePercent || 0);
+        case 'price_low':  return a.price - b.price;
+        case 'volume':     return (b.volume24hUSD || 0) - (a.volume24hUSD || 0);
+        case 'safety':     return (b.safetyScore || 0) - (a.safetyScore || 0);
+        case 'momentum':   return (b.momentumScore || 0) - (a.momentumScore || 0);
+        case 'change':     return (b.price24hChangePercent || 0) - (a.price24hChangePercent || 0);
         default: return 0;
       }
     });
@@ -639,7 +748,7 @@ export default function Dashboard() {
   const topGainer = trending.length > 0
     ? [...trending].sort((a, b) => (b.price24hChangePercent || 0) - (a.price24hChangePercent || 0))[0]
     : null;
-  const safeCount = trending.filter(t => (t.safetyScore || 0) >= 70).length;
+  const safeCount  = trending.filter(t => (t.safetyScore || 0) >= 70).length;
   const riskyCount = trending.filter(t => (t.safetyScore || 0) < 40).length;
 
   return (
@@ -653,11 +762,13 @@ export default function Dashboard() {
           onClose={() => { setShowCompare(false); setCompareTokens([]); }} />
       )}
 
-      {/* Header */}
+      {/* HEADER */}
       <div className="sticky top-0 z-10 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-cyan-500/20">⚡</div>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 hover:scale-105 transition-all duration-200">
+              ⚡
+            </div>
             <div>
               <h1 className="text-xl font-black text-white tracking-tight">BirdRadar</h1>
               <p className="text-xs font-medium text-zinc-500 hidden sm:block">Powered by Birdeye Data API</p>
@@ -666,22 +777,23 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             {compareTokens.length > 0 && (
               <button onClick={() => compareTokens.length === 2 ? setShowCompare(true) : null}
-                className="text-xs px-4 py-2 rounded-xl font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-colors">
+                className="text-xs px-4 py-2 rounded-xl font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 active:scale-95 transition-all">
                 ⚔️ Compare ({compareTokens.length}/2)
               </button>
             )}
             {lastUpdated && <span className="text-xs font-mono text-zinc-500 hidden md:block">Updated: {lastUpdated}</span>}
-            <button onClick={fetchData} className="p-2.5 rounded-xl bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-cyan-400 hover:border-cyan-500/30 transition-all">
-              <span className={spinning ? 'inline-block animate-spin' : 'inline-block'}>↻</span>
+            <button onClick={fetchData}
+              className="p-2.5 rounded-xl bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-cyan-400 hover:border-cyan-500/30 active:scale-90 transition-all">
+              <span className={spinning ? 'inline-block spin-once' : 'inline-block'}>↻</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Solana Stats Bar */}
+      {/* SOLANA STATS */}
       {solanaStats.solPrice > 0 && <SolanaStatsBar stats={solanaStats} trending={trending} />}
 
-      {/* Stats Bar */}
+      {/* STATS BAR */}
       <div className="bg-zinc-900/30 border-b border-zinc-800/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap gap-4 sm:gap-6 text-xs font-medium text-zinc-500 uppercase tracking-wider">
           <span>🔥 Trending: <span className="text-zinc-200 font-bold ml-1">{trending.length}</span></span>
@@ -693,9 +805,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Top Gainer Banner */}
+      {/* TOP GAINER BANNER */}
       {topGainer && !loading && (
-        <div className="bg-gradient-to-r from-zinc-950 via-emerald-950/20 to-zinc-950 border-b border-emerald-900/30 cursor-pointer hover:bg-emerald-900/10 transition-colors"
+        <div className="bg-gradient-to-r from-zinc-950 via-emerald-950/20 to-zinc-950 border-b border-emerald-900/30 cursor-pointer hover:bg-emerald-900/10 banner-pulse transition-colors"
           onClick={() => setSelectedToken(topGainer)}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4 text-xs">
             <span className="font-black text-yellow-500 flex items-center gap-1.5"><span className="text-base">🏆</span> TOP GAINER</span>
@@ -707,7 +819,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Whale Alerts */}
+      {/* WHALE ALERTS */}
       {whaleAlerts.length > 0 && !loading && (
         <div className="border-b border-zinc-800/50 bg-zinc-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
@@ -729,7 +841,7 @@ export default function Dashboard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
 
-        {/* Fear & Greed + Top Movers */}
+        {/* FEAR & GREED + TOP MOVERS */}
         {!loading && trending.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <FearGreedMeter tokens={trending} />
@@ -737,18 +849,15 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Alert Log */}
         <AlertLog alerts={alerts} />
 
-        {/* Compare hint */}
         {compareTokens.length === 1 && (
-          <div className="p-4 rounded-xl mb-6 text-sm bg-cyan-950/30 border border-cyan-500/30 text-cyan-300 flex items-center gap-3">
+          <div className="p-4 rounded-xl mb-6 text-sm bg-cyan-950/30 border border-cyan-500/30 text-cyan-300 flex items-center gap-3 card-enter card-enter-1">
             <span className="text-lg">⚔️</span>
             <span><strong>{compareTokens[0].symbol}</strong> selected — click ⚔️ on another token to compare!</span>
           </div>
         )}
 
-        {/* Watchlist empty state */}
         {filter === 'watchlist' && watchlist.length === 0 && (
           <div className="p-8 rounded-2xl mb-6 text-center bg-yellow-500/5 border border-yellow-500/20">
             <p className="text-4xl mb-3">★</p>
@@ -757,38 +866,36 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Search */}
+        {/* SEARCH */}
         <div className="mb-4 relative">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">🔍</span>
           <input type="text" placeholder="Search token symbol or name..."
             value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-11 pr-4 py-4 text-sm text-white placeholder-zinc-600 bg-zinc-900/50 border border-zinc-800 rounded-2xl focus:outline-none focus:border-cyan-500 focus:bg-zinc-900 transition-all" />
+            className="w-full pl-11 pr-4 py-4 text-sm text-white placeholder-zinc-600 bg-zinc-900/50 border border-zinc-800 rounded-2xl focus:outline-none focus:border-cyan-500 focus:bg-zinc-900 focus:shadow-[0_0_0_3px_rgba(6,182,212,0.1)] transition-all" />
         </div>
 
-        {/* Tabs + Filters + Sort */}
+        {/* TABS + FILTERS */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="flex bg-zinc-900/80 p-1 rounded-xl border border-zinc-800">
             {(['trending', 'new'] as const).map(tab => (
               <button key={tab} onClick={() => { setActiveTab(tab); setFilter('all'); }}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${
                   activeTab === tab ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
                 }`}>
                 {tab === 'trending' ? '🔥 Trending' : '📊 Top Volume'}
               </button>
             ))}
           </div>
-
           <div className="w-px h-8 bg-zinc-800 hidden md:block" />
-
           {([
-            { key: 'all', label: 'All' },
-            { key: 'safe', label: '🟢 Safe' },
-            { key: 'gainers', label: '🚀 Gainers' },
-            { key: 'momentum', label: '⚡ Momentum' },
+            { key: 'all',       label: 'All' },
+            { key: 'safe',      label: '🟢 Safe' },
+            { key: 'gainers',   label: '🚀 Gainers' },
+            { key: 'momentum',  label: '⚡ Momentum' },
             { key: 'watchlist', label: `★ Watchlist${watchlist.length > 0 ? ` (${watchlist.length})` : ''}` },
           ] as { key: FilterType; label: string }[]).map(({ key, label }) => (
             <button key={key} onClick={() => setFilter(key)}
-              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
                 filter === key
                   ? key === 'watchlist' ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/30' : 'bg-zinc-100 text-zinc-900 shadow-md'
                   : 'bg-zinc-900/50 text-zinc-400 border border-zinc-800 hover:bg-zinc-800 hover:text-zinc-200'
@@ -798,20 +905,20 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Sort Bar */}
+        {/* SORT BAR */}
         <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1">
           <span className="text-xs text-zinc-500 whitespace-nowrap">Sort by:</span>
           {([
-            { key: 'default', label: 'Default' },
-            { key: 'change', label: '📈 % Change' },
-            { key: 'volume', label: '💰 Volume' },
-            { key: 'safety', label: '🛡️ Safety' },
-            { key: 'momentum', label: '⚡ Momentum' },
+            { key: 'default',    label: 'Default' },
+            { key: 'change',     label: '📈 % Change' },
+            { key: 'volume',     label: '💰 Volume' },
+            { key: 'safety',     label: '🛡️ Safety' },
+            { key: 'momentum',   label: '⚡ Momentum' },
             { key: 'price_high', label: '💲 Price ↑' },
-            { key: 'price_low', label: '💲 Price ↓' },
+            { key: 'price_low',  label: '💲 Price ↓' },
           ] as { key: SortType; label: string }[]).map(({ key, label }) => (
             <button key={key} onClick={() => setSortBy(key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap active:scale-95 ${
                 sortBy === key
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
                   : 'text-zinc-500 hover:text-zinc-300 border border-transparent hover:border-zinc-700'
@@ -830,46 +937,49 @@ export default function Dashboard() {
           </p>
         )}
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+        {/* TOKEN GRID — key={refreshKey} forces re-mount → card animations replay */}
+        <div key={refreshKey} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
           {loading
             ? Array(12).fill(0).map((_, i) => <SkeletonCard key={i} />)
             : sortedFiltered.length === 0
-            ? <div className="col-span-full text-center py-24 text-zinc-500 font-medium bg-zinc-900/20 rounded-3xl border border-zinc-800 border-dashed">
+            ? (
+              <div className="col-span-full text-center py-24 text-zinc-500 font-medium bg-zinc-900/20 rounded-3xl border border-zinc-800 border-dashed">
                 No tokens match your filter
               </div>
+            )
             : sortedFiltered.map((token, i) => (
-              <TokenCard key={token.address + i} token={token}
+              <TokenCard
+                key={token.address + refreshKey}
+                token={token}
+                index={i}
                 onClick={() => setSelectedToken(token)}
                 onCompare={handleCompare}
                 isCompareSelected={compareTokens.some(t => t.address === token.address)}
                 watchlist={watchlist}
-                onWatchlistToggle={toggleWatchlist} />
+                onWatchlistToggle={toggleWatchlist}
+              />
             ))
           }
         </div>
 
+        {/* FOOTER */}
         <div className="mt-16 pb-8 text-center text-xs font-medium text-zinc-600">
-  Built with <span className="text-zinc-400">Birdeye Data API</span> • Auto-refreshes every 60s • <span className="text-zinc-400">#BirdeyeAPI</span>
-  <div className="mt-3 flex items-center justify-center gap-3">
-    <span className="text-zinc-600">Built by</span>
-    <a href="https://adityachotaliya.vercel.app" target="_blank" rel="noopener noreferrer"
-      className="font-bold text-transparent bg-clip-text"
-      style={{ backgroundImage: 'linear-gradient(90deg, #06b6d4, #3b82f6)' }}>
-      Aditya Chotaliya
-    </a>
-    <span className="text-zinc-700">•</span>
-    <a href="https://adityachotaliya.vercel.app" target="_blank" rel="noopener noreferrer"
-      className="text-zinc-500 hover:text-cyan-400 transition-colors">
-      Portfolio ↗
-    </a>
-    <span className="text-zinc-700">•</span>
-    <a href="https://github.com/adityachotaliya9299-jpg" target="_blank" rel="noopener noreferrer"
-      className="text-zinc-500 hover:text-cyan-400 transition-colors">
-      GitHub ↗
-    </a>
-  </div>
-</div>
+          Built with <span className="text-zinc-400">Birdeye Data API</span> • Auto-refreshes every 60s • <span className="text-zinc-400">#BirdeyeAPI</span>
+          <div className="mt-3 flex items-center justify-center gap-3">
+            <span className="text-zinc-600">Built by</span>
+            <a href="https://portfolio-one-bice-xqt0376aiu.vercel.app" target="_blank" rel="noopener noreferrer"
+              className="font-bold text-transparent bg-clip-text hover:opacity-80 transition-opacity"
+              style={{ backgroundImage: 'linear-gradient(90deg, #06b6d4, #3b82f6)' }}>
+              Aditya Chotaliya
+            </a>
+            <span className="text-zinc-700">•</span>
+            <a href="https://portfolio-one-bice-xqt0376aiu.vercel.app" target="_blank" rel="noopener noreferrer"
+              className="text-zinc-500 hover:text-cyan-400 transition-colors">Portfolio ↗</a>
+            <span className="text-zinc-700">•</span>
+            <a href="https://github.com/adityachotaliya9299-jpg" target="_blank" rel="noopener noreferrer"
+              className="text-zinc-500 hover:text-cyan-400 transition-colors">GitHub ↗</a>
+          </div>
+        </div>
       </div>
     </main>
   );

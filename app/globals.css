@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #09090b;
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -12,15 +12,153 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans, Arial, Helvetica, sans-serif);
+}
+
+/* ─── CARD ENTRANCE ───────────────────────────────────────────────────────── */
+@keyframes cardSlideIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.card-enter { animation: cardSlideIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.card-enter-1  { animation-delay: 0.03s; }
+.card-enter-2  { animation-delay: 0.06s; }
+.card-enter-3  { animation-delay: 0.09s; }
+.card-enter-4  { animation-delay: 0.12s; }
+.card-enter-5  { animation-delay: 0.15s; }
+.card-enter-6  { animation-delay: 0.18s; }
+.card-enter-7  { animation-delay: 0.21s; }
+.card-enter-8  { animation-delay: 0.24s; }
+.card-enter-9  { animation-delay: 0.27s; }
+.card-enter-10 { animation-delay: 0.30s; }
+.card-enter-11 { animation-delay: 0.33s; }
+.card-enter-12 { animation-delay: 0.36s; }
+.card-enter-13 { animation-delay: 0.38s; }
+.card-enter-14 { animation-delay: 0.40s; }
+.card-enter-15 { animation-delay: 0.42s; }
+.card-enter-16 { animation-delay: 0.44s; }
+.card-enter-17 { animation-delay: 0.46s; }
+.card-enter-18 { animation-delay: 0.48s; }
+.card-enter-19 { animation-delay: 0.50s; }
+.card-enter-20 { animation-delay: 0.52s; }
+
+/* ─── GLOW HOVER ──────────────────────────────────────────────────────────── */
+.card-glow-safe,
+.card-glow-caution,
+.card-glow-risky {
+  transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
+}
+.card-glow-safe:hover {
+  box-shadow: 0 0 28px rgba(52,211,153,0.13), 0 8px 32px rgba(0,0,0,0.5);
+  transform: translateY(-3px);
+  border-color: rgba(52,211,153,0.28) !important;
+}
+.card-glow-caution:hover {
+  box-shadow: 0 0 28px rgba(250,204,21,0.11), 0 8px 32px rgba(0,0,0,0.5);
+  transform: translateY(-3px);
+  border-color: rgba(250,204,21,0.22) !important;
+}
+.card-glow-risky:hover {
+  box-shadow: 0 0 28px rgba(244,63,94,0.11), 0 8px 32px rgba(0,0,0,0.5);
+  transform: translateY(-3px);
+  border-color: rgba(244,63,94,0.22) !important;
+}
+
+/* ─── MOMENTUM BAR ────────────────────────────────────────────────────────── */
+@keyframes barFill {
+  from { width: 0% !important; }
+}
+.momentum-bar-fill {
+  animation: barFill 1.1s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 0.35s;
+}
+
+/* ─── FEAR/GREED CIRCLE
+   Uses CSS transition on stroke-dasharray — set via JS.
+   The circle starts at dasharray "0 226" and transitions to target.
+   No CSS keyframe animation needed — just a smooth transition.        ──── */
+.fg-circle {
+  transition: stroke-dasharray 1.5s cubic-bezier(0.22, 1, 0.36, 1) 0.3s,
+              stroke 0.5s ease;
+}
+
+/* ─── WHALE SHIMMER ───────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.whale-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(52,211,153,0.07) 25%,
+    rgba(52,211,153,0.16) 50%,
+    rgba(52,211,153,0.07) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3.2s infinite;
+}
+
+/* ─── LIVE DOT ────────────────────────────────────────────────────────────── */
+@keyframes livePing {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(1.6); }
+}
+.live-dot { animation: livePing 2s ease-in-out infinite; }
+
+/* ─── REFRESH SPIN ────────────────────────────────────────────────────────── */
+@keyframes rotateFull {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.spin-once { animation: rotateFull 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* ─── SKELETON SHIMMER ────────────────────────────────────────────────────── */
+@keyframes skeletonShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(39,39,42,0.6) 25%,
+    rgba(63,63,70,0.6) 50%,
+    rgba(39,39,42,0.6) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+/* ─── BADGE POP ───────────────────────────────────────────────────────────── */
+@keyframes badgePop {
+  0%   { transform: scale(0.75); opacity: 0; }
+  65%  { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.badge-pop {
+  animation: badgePop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: 0.1s;
+}
+
+/* ─── TOP GAINER BANNER ───────────────────────────────────────────────────── */
+@keyframes bannerPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.82; }
+}
+.banner-pulse { animation: bannerPulse 3.5s ease-in-out infinite; }
+
+/* ─── SCROLLBAR ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: #18181b; }
+::-webkit-scrollbar-thumb  { background: #3f3f46; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+/* ─── FOCUS ───────────────────────────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid rgba(6,182,212,0.5);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
