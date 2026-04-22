@@ -3,43 +3,40 @@
 Real-time Solana token safety scanner powered by Birdeye Data API.
 
 ## 🔴 Live Demo
-[https://birdeye-dashboard.vercel.app](https://birdeye-dashboard.vercel.app)
+https://birdeye-dashboard.vercel.app
 
-## 🛡️ What it does
-- Scans trending Solana tokens in real-time
-- Scores each token 0-100 for rug pull risk automatically
-- Calculates momentum score (volume + price action combined)
-- Top Volume scanner — see highest volume tokens on Solana
-- Search and filter: Safe Only, >50% Gainers, High Momentum
-- Click any token for full details
+## 🎬 Demo Video
+[Watch demo video](https://www.loom.com/share/bba1e2d7187249e4badccad0f0c322ab)
+
+## 🛡️ Features
+- Auto risk scoring (0-100) for every token
+- Whale alerts — volume spike detection
+- Fear & Greed market sentiment meter
+- Token comparison side by side
+- Watchlist with localStorage persistence
+- Sort by safety, momentum, volume, price
+- Top Movers dashboard
+- Solana live stats bar
 - Auto-refreshes every 60 seconds
+- Mobile responsive
 
-## 🔌 Birdeye Endpoints Used
-- `/defi/token_trending` — real-time trending tokens
-- `/defi/tokenlist` — top volume tokens on Solana
+## 🔌 Birdeye Endpoints
+- /defi/token_trending
+- /defi/tokenlist
 
 ## 🛠️ Tech Stack
-- Next.js 14 + TypeScript
+- Next.js 16 + TypeScript
 - Tailwind CSS
 - Birdeye Data API
-- Vercel (deployment)
+- Vercel
 
 ## 🚀 Run Locally
-\`\`\`bash
 git clone https://github.com/adityachotaliya9299-jpg/birdeye-dashboard
 cd birdeye-dashboard
 npm install
-# Create .env.local and add:
-# BIRDEYE_API_KEY=your_key_here
+# Add BIRDEYE_API_KEY to .env.local
 npm run dev
-\`\`\`
 
-## 📊 Risk Scoring Logic
-Each token is scored 0-100 based on:
-- Liquidity depth (low liquidity = high rug risk)
-- Volume/liquidity ratio (detects wash trading)
-- Price pump magnitude (extreme pumps = dump risk)
-- Market cap size (micro caps = higher risk)
-- Volume change anomalies (bot activity detection)
-
-Built for Birdeye Data BIP Competition Sprint 1 • #BirdeyeAPI
+## 👤 Built by
+Aditya Chotaliya
+https://adityachotaliya.vercel.app
